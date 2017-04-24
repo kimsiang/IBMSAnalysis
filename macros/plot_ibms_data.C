@@ -14,17 +14,16 @@ using namespace std;
 #define IBMS_NUM_CHANNELS 80
 #define IBMS_TRACE_LENGTH 1024
 #define IBMS_NUM_TRIGGERS 12
-#define IBMS_LVDS_BITS 16
+#define IBMS_LVDS_BITS 3
 
-struct ibmsRaw{
-
+struct ibms_struct {
     ULong64_t sys_clock[IBMS_NUM_CHANNELS];
     ULong64_t dev_clock[IBMS_NUM_CHANNELS];
     UShort_t trace[IBMS_NUM_CHANNELS][IBMS_TRACE_LENGTH];
     UShort_t trigger[IBMS_NUM_TRIGGERS][IBMS_TRACE_LENGTH];
-    UShort_t lvds_bits[3];
-
+    UShort_t lvds_bits[IBMS_LVDS_BITS];
 };
+
 
 void plot_ibms_data(int eventNum){
 
@@ -33,7 +32,7 @@ void plot_ibms_data(int eventNum){
     gStyle->SetTitleH(0.1);
 
     // Access to a TTree
-    TFile *file = new TFile("ibms_run_00089.root");
+    TFile *file = new TFile("ibms_run_00046.root");
     TTree *tree = (TTree*)file->Get("t_ibms");
 
     // Prefill a vector of time (0..1023)
@@ -44,75 +43,76 @@ void plot_ibms_data(int eventNum){
     std::vector<std::vector<int>> trace(80,std::vector<int>(1024,0));
 
     // Declare an ibms struct holder
-    ibmsRaw ibms;
-    tree->SetBranchAddress("ibms",&ibms);
+    ibms_struct ibmsData;
+    tree->SetBranchAddress("ibms",&ibmsData.sys_clock);
 
     // Output number of events
     std::cout<<"Number of events taken = "<<tree->GetEntries()<<endl;
     int nEvent = tree->GetEntries();
 
-
-
-
+    // Running as event by event trace display
     if(eventNum>-1){
 
-        // Create a canvas and split the canvas into a 4x4 grid (each event)
-        TCanvas *c1 = new TCanvas("c1","c1",1400,800);
-        c1->Divide(4,4);
+	// Create a canvas and split the canvas into a 4x4 grid (each event)
+	TCanvas *c1 = new TCanvas("c1","c1",1400,800);
+	c1->Divide(4,4);
 
-        TH1D *h[16];
+	TH1D *h[16];
 
-        tree->GetEntry(eventNum);
+	tree->GetEntry(eventNum);
+	std::cout<<"Looking at event "<<eventNum<<endl;
 
-        for(int i=0; i<16; i++){
-        
-            c1->cd(i+1);
+	for(int i=0; i<16; i++){
 
-            h[i] = new TH1D(Form("Event%i, CH%i",eventNum, i+1),Form("Event%i, CH%i",eventNum, i+1),1024,0,1024);
+	    c1->cd(i+1);
 
-            for(int j=0; j<1024; j++){
-                h[i]->SetBinContent(j+1,ibms.trace[i][j]);
-                trace[i][j] += trace[i][j];
-            }
+	    h[i] = new TH1D(Form("Event%i, CH%i",eventNum, i+1),Form("Event%i, CH%i",eventNum, i+1),1024,0,1024);
 
-            h[i]->GetXaxis()->SetTitle("time [ns]");
-            h[i]->Draw();
-        }
+	    for(int j=0; j<1024; j++){
+		h[i]->SetBinContent(j+1,ibmsData.trace[i][j]);
+	    }
+
+	    h[i]->GetXaxis()->SetTitle("time [ns]");
+	    h[i]->Draw();
+	}
 
     }
 
+    // Running as per run averaging trace display
     if(eventNum<0){
 
-        // Create a canvas and split the canvas into a 4x4 grid (average)
-        TCanvas *c2 = new TCanvas("c2","c2",1400,800);
-        c2->Divide(4,4);
+	// Create a canvas and split the canvas into a 4x4 grid (average)
+	TCanvas *c2 = new TCanvas("c2","c2",1400,800);
+	c2->Divide(4,4);
 
-        for(int iEvent=0;iEvent<nEvent;iEvent++){
-            tree->GetEntry(iEvent);
+	for(int iEvent=0;iEvent<nEvent;iEvent++){
 
-            for(int i=0; i<16; i++){
-                for(int j=0; j<1024; j++){
-                    trace[i][j] += ibms.trace[i][j];
-                }
-            }
+	    tree->GetEntry(iEvent);
 
-        }
+	    for(int i=0; i<16; i++){
+		for(int j=0; j<1024; j++){
+		    trace[i][j] += ibmsData.trace[i][j];
+		}
+	    }
 
-        // Creating avg 
-        TH1D *h_avg[16];
-        for(int i=0; i<16; i++){
+	}
 
-            c2->cd(i+1);
-            h_avg[i] = new TH1D(Form("CH%i",i+1),Form("CH%i",i+1),1024,0,1024);
+	// Creating avg histogram 
+	TH1D *h_avg[16];
 
-            for(int j=0; j<1024; j++){
-                h_avg[i]->SetBinContent(j+1,trace[i][j]/nEvent);
-            }
+	for(int i=0; i<16; i++){
 
-            h_avg[i]->GetXaxis()->SetTitle("time [ns]");
-            h_avg[i]->Draw();
+	    c2->cd(i+1);
+	    h_avg[i] = new TH1D(Form("CH%i",i+1),Form("CH%i",i+1),1024,0,1024);
 
-        }
+	    for(int j=0; j<1024; j++){
+		h_avg[i]->SetBinContent(j+1,trace[i][j]/nEvent);
+	    }
+
+	    h_avg[i]->GetXaxis()->SetTitle("time [ns]");
+	    h_avg[i]->Draw();
+
+	}
 
     }
 }
